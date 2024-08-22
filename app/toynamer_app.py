@@ -13,6 +13,8 @@ TOYNAMER_MODEL = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
 # Streamlit app
 def main():
     st.markdown("<h1 style='text-align: center; color: white;'>ToyNamer - Have Fun!</h1>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; font-weight: thin; font-size: 18px; opacity: 0.8;'>ToyNamer is a fun project that generates Turkish names using a character-level language model.</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; font-weight: thin; font-size: 18px; opacity: 0.8;'>Author: Enes Özeren</h2>", unsafe_allow_html=True)
 
     # Apply custom CSS to style the button and center it
     st.markdown(
