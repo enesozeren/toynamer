@@ -3,8 +3,7 @@ A simple but fun Turkish name generator model
 
 ## Streamlit App
 
-To check out the streamlit app, go to this link:
-TBD
+To check out the streamlit app, go to this link: https://toynamer.streamlit.app
 
 ## Training
 
