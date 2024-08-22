@@ -1,10 +1,9 @@
 import streamlit as st
 import torch
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
 from src.inference import generate_name
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
 MODEL_PATH = "outputs/train_run_2024-08-22_21-09-19/best.pth"
 TOYNAMER_MODEL = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
