@@ -8,6 +8,7 @@ from datetime import datetime
 from src.rnn_model import RNN
 from src.variables import VOCAB_SIZE
 from src.utils import char_to_onehot
+import json
 
 def prepare_data(data_dir_path):
     # read the train and val dataset from the txt files
@@ -46,8 +47,17 @@ def train(train_dataset, validation_dataset,
     '''
 
     # Create a new folder in the output directory with current datetime to save the model and logs
-    output_folder_path = f'{output_directory_path}/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
+    output_folder_path = f'{output_directory_path}/train_run_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
     os.makedirs(output_folder_path)
+
+    # Save hyperparameters in a json file
+    hyperparameters = {
+        'hidden_size': hidden_size,
+        'epochs': epochs,
+        'lr': lr
+    }
+    with open(f'{output_folder_path}/hyperparameters.json', 'w') as file:
+        json.dump(hyperparameters, file)
 
     # Initialize the model
     name_generator = RNN(input_size=VOCAB_SIZE, hidden_size=hidden_size, output_size=VOCAB_SIZE)
@@ -99,24 +109,24 @@ def train(train_dataset, validation_dataset,
         validation_loss /= len(validation_dataset)
         validation_loss_logs.append(validation_loss)
 
-        print(f'Epoch {epoch} - Train Loss: {train_loss} | Validation Loss: {validation_loss}')
+        print(f'Epoch {epoch} / {epochs-1} - Train Loss: {train_loss} | Validation Loss: {validation_loss}')
 
         # Save the best model
         if validation_loss < best_validation_loss:
             best_validation_loss = validation_loss
-            torch.save(name_generator.state_dict(), f'{output_folder_path}/best.pth')
+            torch.save(name_generator, f'{output_folder_path}/best.pth')
+        
+        # Save the loss plots in each epoch
+        plt.figure()
+        plt.plot(train_loss_logs, 'o-', label='Train Loss')
+        plt.plot(validation_loss_logs, 'o-', label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.savefig(f'{output_folder_path}/loss_plot.png')
 
     # Save the last model
-    torch.save(name_generator.state_dict(), f'{output_folder_path}/last.pth')
-
-    # Save the loss plots
-    plt.figure()
-    plt.plot(train_loss_logs, label='Train Loss')
-    plt.plot(validation_loss_logs, label='Validation Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.savefig(f'{output_folder_path}/loss_plot.png')
+    torch.save(name_generator, f'{output_folder_path}/last.pth')
 
 
 if __name__ == '__main__':

@@ -1,9 +1,11 @@
 import torch
 import numpy as np
+import argparse
 from src.utils import char_to_onehot
 from src.variables import int_to_char
 
 def generate_name(model, temperature=0.5):
+    model.eval()
     with torch.no_grad():
         hidden = model.initHidden()
         name = ''
@@ -22,3 +24,14 @@ def generate_name(model, temperature=0.5):
             char = int_to_char[char_idx]
             if char != '<E>': name += char
     return name
+
+if __name__ == '__main__':
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('--model_path', type=str, required=True)
+    argparser.add_argument('--temperature', type=float, default=0.5)
+    args = argparser.parse_args()
+
+    toynamer_model = torch.load(args.model_path, map_location=torch.device('cpu'))
+    generated_name = generate_name(model=toynamer_model, temperature=args.temperature)
+
+    print(f'Generated Name: {generated_name}')
