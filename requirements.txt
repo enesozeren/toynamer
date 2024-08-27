@@ -6,3 +6,4 @@ tqdm==4.66.5
 fastapi==0.112.1
 uvicorn==0.30.6
 streamlit==1.37.1
+optuna==3.6.1

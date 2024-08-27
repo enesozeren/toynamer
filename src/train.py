@@ -40,7 +40,7 @@ def prepare_data(data_dir_path):
 
 
 def train(train_dataset, validation_dataset, 
-          hidden_size, epochs, lr, 
+          hidden_size, epochs, lr, weight_decay,
           output_directory_path):
     '''
     Train the model with the given dataset and hyperparameters
@@ -54,7 +54,8 @@ def train(train_dataset, validation_dataset,
     hyperparameters = {
         'hidden_size': hidden_size,
         'epochs': epochs,
-        'lr': lr
+        'lr': lr,
+        'weight_decay': weight_decay
     }
     with open(f'{output_folder_path}/hyperparameters.json', 'w') as file:
         json.dump(hyperparameters, file)
@@ -65,11 +66,17 @@ def train(train_dataset, validation_dataset,
     print(f'Number of learnable parameters: {numb_of_learned_params}')
 
     loss_fn = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(name_generator.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(name_generator.parameters(), lr=lr, weight_decay=weight_decay)
 
     train_loss_logs = []
     validation_loss_logs = []
     best_validation_loss = float('inf')
+
+    # Create a file to log the train and validation losses for each epoch
+    log_file_path = f'{output_folder_path}/losses.txt'
+    with open(log_file_path, 'w') as log_file:
+        log_file.write('Epoch\tTrain Loss\tValidation Loss\n')  # Header for the file
+
     for epoch in range(epochs):
         train_loss = 0
         for input_seq, target in tqdm(train_dataset):
@@ -109,6 +116,10 @@ def train(train_dataset, validation_dataset,
         validation_loss /= len(validation_dataset)
         validation_loss_logs.append(validation_loss)
 
+        # Log the current epoch losses to the txt file
+        with open(log_file_path, 'a') as log_file:
+            log_file.write(f'{epoch}\t{train_loss}\t{validation_loss}\n')
+        
         print(f'Epoch {epoch} / {epochs-1} - Train Loss: {train_loss} | Validation Loss: {validation_loss}')
 
         # Save the best model
@@ -124,6 +135,7 @@ def train(train_dataset, validation_dataset,
         plt.ylabel('Loss')
         plt.legend()
         plt.savefig(f'{output_folder_path}/loss_plot.png')
+        plt.close()
 
     # Save the last model
     torch.save(name_generator, f'{output_folder_path}/last.pth')
@@ -136,6 +148,7 @@ if __name__ == '__main__':
     argparser.add_argument('--hidden_size', type=int, default=32)
     argparser.add_argument('--epochs', type=int, default=50)
     argparser.add_argument('--lr', type=float, default=0.0001)
+    argparser.add_argument('--weight_decay', type=float, default=0.0)
     args = argparser.parse_args()
     
     train_dataset, val_dataset = prepare_data(args.data_directory_path)
@@ -144,4 +157,5 @@ if __name__ == '__main__':
           validation_dataset=val_dataset,
           hidden_size=args.hidden_size,
           epochs=args.epochs, lr=args.lr,
+          weight_decay=args.weight_decay,
           output_directory_path=args.output_directory_path)

@@ -12,6 +12,15 @@ To train the model with default hyperparameters and dataset use the following co
 python src/train.py
 ```
 
+## Evaluating
+
+If you want to evaluate the trained model weights on evaluation or another dataset use example below:
+```bash
+python src/evaluate.py \
+--val_data_path=data/val_dataset.txt \
+--model_path=outputs/train_run_2024-08-22_21-09-19/best.pth
+```
+
 ## Runnig the app localy
 
 To run the app in your local use the following command:
