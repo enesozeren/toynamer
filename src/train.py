@@ -9,6 +9,7 @@ from src.rnn_model import RNN
 from src.variables import VOCAB_SIZE
 from src.utils import char_to_onehot
 import json
+import logging
 
 def prepare_data(data_dir_path):
     # read the train and val dataset from the txt files
@@ -50,6 +51,13 @@ def train(train_dataset, validation_dataset,
     output_folder_path = f'{output_directory_path}/train_run_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
     os.makedirs(output_folder_path)
 
+    logging.basicConfig(filename=os.path.join(output_folder_path, 'logfile.txt'),
+                        level=logging.INFO)
+    
+    logging.info(f'Train Dataset Size: {len(train_dataset)}')
+    logging.info(f'Val Dataset Size: {len(val_dataset)}')
+    logging.info(f"Vocab Size (# of letter tokens): {VOCAB_SIZE}")
+
     # Save hyperparameters in a json file
     hyperparameters = {
         'hidden_size': hidden_size,
@@ -57,13 +65,15 @@ def train(train_dataset, validation_dataset,
         'lr': lr,
         'weight_decay': weight_decay
     }
+    logging.info(f"Hyperparameters: {hyperparameters}")
+
     with open(f'{output_folder_path}/hyperparameters.json', 'w') as file:
         json.dump(hyperparameters, file)
 
     # Initialize the model
     name_generator = RNN(input_size=VOCAB_SIZE, hidden_size=hidden_size, output_size=VOCAB_SIZE)
     numb_of_learned_params = sum(p.numel() for p in name_generator.parameters() if p.requires_grad)
-    print(f'Number of learnable parameters: {numb_of_learned_params}')
+    logging.info(f"Model Learnable Parameter Size: {numb_of_learned_params}")
 
     loss_fn = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(name_generator.parameters(), lr=lr, weight_decay=weight_decay)
