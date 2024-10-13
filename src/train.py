@@ -1,47 +1,20 @@
 import os
 import torch
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
 import argparse
 from datetime import datetime
-from src.rnn_model import RNN
-from src.variables import VOCAB_SIZE
-from src.utils import char_to_onehot
 import json
 import logging
 
-def prepare_data(data_dir_path):
-    # read the train and val dataset from the txt files
-    with open(f'{data_dir_path}/train_dataset.txt', 'r') as file:
-        train_name_list = file.read().split('\n')
+from src.rnn_model import RNN
+from src.variables import VOCAB_SIZE
+from src.data_class import NameData
 
-    with open(f'{data_dir_path}/val_dataset.txt', 'r') as file:
-        val_name_list = file.read().split('\n')
-    
-    # Create train dataset for predicting the next character
-    train_dataset = []
-    for name in train_name_list:
-        name_char_list = list(['<S>']) + list(name) + list(['<E>'])
-        for i in range(1, len(name_char_list)):
-            input = [char for char in name_char_list[:i]]
-            output = [name_char_list[i]]
-            train_dataset.append((input, output))
-    
-    # Create validation dataset for predicting the next character
-    val_dataset = []
-    for name in val_name_list:
-        name_char_list = list(['<S>']) + list(name) + list(['<E>'])
-        for i in range(1, len(name_char_list)):
-            input = [char for char in name_char_list[:i]]
-            output = [name_char_list[i]]
-            val_dataset.append((input, output))
-
-    return train_dataset, val_dataset
-
-
-def train(train_dataset, validation_dataset, 
-          hidden_size, epochs, lr, weight_decay,
+def train(train_data_path, val_data_path, 
+          hidden_size, epochs, lr, weight_decay, batch_size,
           output_directory_path):
     '''
     Train the model with the given dataset and hyperparameters
@@ -54,30 +27,42 @@ def train(train_dataset, validation_dataset,
     logging.basicConfig(filename=os.path.join(output_folder_path, 'logfile.txt'),
                         level=logging.INFO)
     
-    logging.info(f'Train Dataset Size: {len(train_dataset)}')
-    logging.info(f'Val Dataset Size: {len(val_dataset)}')
-    logging.info(f"Vocab Size (# of letter tokens): {VOCAB_SIZE}")
-
     # Save hyperparameters in a json file
     hyperparameters = {
         'hidden_size': hidden_size,
         'epochs': epochs,
         'lr': lr,
-        'weight_decay': weight_decay
+        'weight_decay': weight_decay,
+        'batch_size': batch_size
     }
     logging.info(f"Hyperparameters: {hyperparameters}")
 
-    with open(f'{output_folder_path}/hyperparameters.json', 'w') as file:
-        json.dump(hyperparameters, file)
+    # Train and Validation datasets
+    train_dataset = NameData(name_data_path=train_data_path)
+    val_dataset = NameData(name_data_path=val_data_path)
 
+    # Log Dataset Sizes
+    logging.info(f'Train Dataset Size: {train_dataset.__len__()}')
+    logging.info(f'Val Dataset Size: {val_dataset.__len__()}')
+    logging.info(f"Vocab Size (# of letter tokens): {VOCAB_SIZE}")
+    
     # Initialize the model
-    name_generator = RNN(input_size=VOCAB_SIZE, hidden_size=hidden_size, output_size=VOCAB_SIZE)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    name_generator = RNN(input_size=VOCAB_SIZE, hidden_size=hidden_size, output_size=VOCAB_SIZE).to(device)
     numb_of_learned_params = sum(p.numel() for p in name_generator.parameters() if p.requires_grad)
     logging.info(f"Model Learnable Parameter Size: {numb_of_learned_params}")
 
+    # Loss and optimizer
     loss_fn = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(name_generator.parameters(), lr=lr, weight_decay=weight_decay)
 
+    # Data laoders
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, 
+                              shuffle=True, drop_last=True)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, 
+                              shuffle=False, drop_last=True)
+    
+    # Log variables
     train_loss_logs = []
     validation_loss_logs = []
     best_validation_loss = float('inf')
@@ -87,43 +72,65 @@ def train(train_dataset, validation_dataset,
     with open(log_file_path, 'w') as log_file:
         log_file.write('Epoch\tTrain Loss\tValidation Loss\n')  # Header for the file
 
+    # CHECK HERE AND FIX THE PROBLEM
     for epoch in range(epochs):
         train_loss = 0
-        for input_seq, target in tqdm(train_dataset):
-            hidden = name_generator.initHidden()
+        for input_seqs, targets in tqdm(train_loader):
 
-            for char in input_seq:
-                input_tensor = char_to_onehot(char)
-                output, hidden = name_generator(input_tensor, hidden)
-            
-            output_tensor = char_to_onehot(target[0])
-
+            # Move data to device
+            input_seqs, targets = input_seqs.to(device), targets.to(device)
+            print("Input seq:", input_seqs.shape)
+            print("Targets:", targets.shape)
+            # Get the batch size dynamically
+            batch_size_dynamic = input_seqs.size(0)
+            hidden = name_generator.initHidden(batch_size=batch_size_dynamic).to(device)
             optimizer.zero_grad()
-            loss = loss_fn(output, output_tensor)
+
+            outputs = []
+            for t in range(input_seqs.size(1)):
+                output, hidden = name_generator(input_seqs[:, t], hidden)
+                outputs.append(output)
+            
+            print("outputs:", len(outputs))
+            outputs = torch.stack(outputs, dim=1)  # Stack outputs for each time step
+            # Reshape outputs and targets for loss calculation
+            outputs = outputs.view(-1, outputs.size(-1))  # (batch_size * seq_len, vocab_size)
+            targets = targets.view(-1)  # (batch_size * seq_len)
+            print("outputs and targets at the end:", outputs.shape, targets.shape)
+            loss = loss_fn(outputs, targets)
             loss.backward()
             optimizer.step()
 
             train_loss += loss.item()
         
-        train_loss /= len(train_dataset)
+        train_loss /= len(train_loader)
         train_loss_logs.append(train_loss)
 
         name_generator.eval()
         validation_loss = 0
         with torch.no_grad():
-            for input_seq, target in validation_dataset:
-                hidden = name_generator.initHidden()
-
-                for char in input_seq:
-                    input_tensor = char_to_onehot(char)
-                    output, hidden = name_generator(input_tensor, hidden)
+            for batch in val_loader:
+                input_seqs, targets = batch
+                # Move data to device
+                input_seqs, targets = input_seqs.to(device), targets.to(device)
                 
-                output_tensor = char_to_onehot(target[0])
+                # Get the batch size dynamically
+                batch_size_dynamic = input_seqs.size(0)
+                hidden = name_generator.initHidden(batch_size=batch_size_dynamic).to(device)
+                
+                outputs = []
+                for t in range(input_seqs.size(1)):
+                    output, hidden = name_generator(input_seqs[:, t], hidden)
+                    outputs.append(output)
 
-                loss = loss_fn(output, output_tensor)
+                outputs = torch.stack(outputs, dim=1)
+                outputs = outputs.view(-1, outputs.size(-1))
+                targets = targets.view(-1)
+
+                loss = loss_fn(outputs, targets)
                 validation_loss += loss.item()
             
-        validation_loss /= len(validation_dataset)
+        validation_loss /= len(val_loader)
         validation_loss_logs.append(validation_loss)
 
         # Log the current epoch losses to the txt file
@@ -159,13 +166,16 @@ if __name__ == '__main__':
     argparser.add_argument('--epochs', type=int, default=50)
     argparser.add_argument('--lr', type=float, default=0.0001)
     argparser.add_argument('--weight_decay', type=float, default=0.0)
+    argparser.add_argument('--batch_size', type=int, default=1)
     args = argparser.parse_args()
-    
-    train_dataset, val_dataset = prepare_data(args.data_directory_path)
 
-    train(train_dataset=train_dataset, 
-          validation_dataset=val_dataset,
+    train_data_path = os.path.join(args.data_directory_path, 'train_dataset.txt')
+    val_data_path = os.path.join(args.data_directory_path, 'val_dataset.txt')
+
+    train(train_data_path=train_data_path, 
+          val_data_path=val_data_path,
           hidden_size=args.hidden_size,
           epochs=args.epochs, lr=args.lr,
           weight_decay=args.weight_decay,
+          batch_size=args.batch_size,
           output_directory_path=args.output_directory_path)

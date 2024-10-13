@@ -34,9 +34,11 @@ if __name__ == '__main__':
     val_names = names[split_idx:]
     
     with open('data/train_dataset.txt', 'w') as f:
-        for name in train_names:
+        for name in train_names[:-1]:
             f.write(name + '\n')
+        f.write(train_names[-1])
 
     with open('data/val_dataset.txt', 'w') as f:
-        for name in val_names:
+        for name in val_names[:-1]:
             f.write(name + '\n')      
+        f.write(val_names[-1])

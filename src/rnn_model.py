@@ -26,5 +26,5 @@ class RNN(nn.Module):
 
         return output, current_hidden
     
-    def initHidden(self):
-        return torch.zeros(1, self.hidden_size)
+    def initHidden(self, batch_size):
+        return torch.zeros(batch_size, self.hidden_size).to(next(self.parameters()).device)
